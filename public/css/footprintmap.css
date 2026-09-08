@@ -1,0 +1,254 @@
+/* =========================================================
+   FootprintMap 前台 — 旅行足迹地图
+   ========================================================= */
+.footprintmap-wrap {
+	position: relative;
+	max-width: 100%;
+	margin: 1em 0;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+	box-sizing: border-box;
+}
+.footprintmap-wrap *,
+.footprintmap-wrap *::before,
+.footprintmap-wrap *::after {
+	box-sizing: border-box;
+}
+.footprintmap-container {
+	width: 100%;
+	height: 520px;
+	background: #eef2f5;
+	position: relative;
+	overflow: hidden;
+	border: 1px solid #e0e0e0;
+	border-radius: 4px;
+}
+.footprintmap-error {
+	color: #c0392b;
+	background: #fdecea;
+	border: 1px solid #f5c6c6;
+	padding: 10px 14px;
+	border-radius: 4px;
+}
+
+/* 右下角计数徽标 */
+.footprintmap-status {
+	position: absolute;
+	right: 12px;
+	bottom: 26px;
+	z-index: 60;
+	background: rgba(255, 255, 255, .96);
+	color: #2c3e50;
+	padding: 6px 14px;
+	border-radius: 20px;
+	font-size: 13px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+	pointer-events: none;
+}
+.footprintmap-status b {
+	color: #e1341e;
+	font-size: 15px;
+	margin: 0 2px;
+}
+
+/* ---- 单独点：文章/默认图封面 30px 圆形；无图无文章的红色小圆点 16px ---- */
+.tm-point {
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	border: 1px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, .18), 0 2px 5px rgba(0, 0, 0, .28);
+	cursor: pointer;
+	position: relative;
+}
+.tm-point.tm-red {
+	width: 16px;
+	height: 16px;
+	background: #e1341e;
+	border-width: 1px;
+	border-color: #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, .18), 0 2px 5px rgba(0, 0, 0, .28);
+	opacity: .8;  /* 注意透明度与 .tm-cluster 保持一致 */
+}
+
+/* ---- 聚合点：红色渐变圆 + 白色数字 ---- */
+.tm-cluster {
+	background: radial-gradient(circle at 32% 30%, #ff6b54, #d92f16 70%, #b91f08);
+	color: #fff;
+	border: 1px solid #fff;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 700;
+	font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 3px 7px rgba(0, 0, 0, .3);
+	cursor: zoom-in;
+	user-select: none;
+	opacity: .8;  /* 注意透明度与 .tm-point.tm-red 保持一致 */
+}
+
+/* 右上角自定义 + - home 缩放控件 */
+.tm-zoomctrl {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	z-index: 80;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border-radius: 3px;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+	overflow: hidden;
+}
+.tm-zoomctrl button {
+	width: 34px;
+	height: 34px;
+	border: none;
+	background: #fff;
+	color: #2c3e50;
+	font-size: 20px;
+	line-height: 1;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+.tm-zoomctrl button + button {
+	border-top: 1px solid #e6e6e6;
+}
+.tm-zoomctrl button:hover {
+	background: #f2f4f7;
+	color: #e1341e;
+}
+.tm-zoomctrl button svg {
+	width: 18px;
+	height: 18px;
+	fill: currentColor;
+}
+
+/* ---- 点击点后弹出的 InfoWindow 自定义气泡 ---- */
+.tm-bubble {
+	width: 240px;
+	border-radius: 10px;
+	overflow: hidden;
+	background: #fff;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+	position: relative;
+}
+.tm-bubble .tm-close {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 5;
+	width: 22px;
+	height: 22px;
+	line-height: 1;
+	background: rgba(0, 0, 0, .45);
+	border: none;
+	color: #fff;
+	/* font-size: 16px; */
+	border-radius: 50%;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background .15s;
+}
+.tm-bubble .tm-close::before,
+.tm-bubble .tm-close::after {
+	content: '';
+	position: absolute;
+	width: 12px;
+	height: 2px;
+	background: #fff;
+	border-radius: 1px;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.tm-bubble .tm-close::after {
+	transform: translate(-50%, -50%) rotate(-45deg);
+}
+.tm-bubble .tm-close:hover {
+	background: rgba(0, 0, 0, .72);
+}
+.tm-bubble .tm-bubble-name {
+	padding: 9px 34px 4px 12px;
+	font-weight: 600;
+	font-size: 15px;
+	color: #222;
+	line-height: 1.3;
+	background: #fff;
+}
+.tm-bubble .tm-bubble-sub {
+	padding: 0 12px 9px;
+	font-size: 12px;
+	color: #8a919b;
+}
+/* 气泡顶部特色图（仅有关联文章的点渲染） */
+.tm-bubble .tm-bubble-hero {
+	width: 100%;
+	height: 100px;
+	background-size: cover;
+	background-position: center;
+}
+/* 有文章点的气泡：图片置顶，坐标名与右侧省/国同行 */
+.tm-bubble--art .tm-bubble-hero {
+	display: block;
+}
+.tm-bubble--art .tm-bubble-meta {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 8px; /* 坐标名与省/国小字的间距（替代旧的全角空格占位） */
+	padding: 9px 12px 5px;
+	background: #fff;
+}
+.tm-bubble--art .tm-bubble-name {
+	padding: 0;
+	display: inline;
+}
+.tm-bubble--art .tm-bubble-region {
+	font-size: 12px;
+	font-weight: 400;
+	color: #8a919b;
+	white-space: nowrap;
+	line-height: 1.3;
+}
+/* 气泡内文章标题链接：逐条换行排列，无横线分隔，间距紧凑 */
+.tm-bubble .tm-article-link {
+	display: block;
+	padding: 2px 12px;
+	font-size: 13px;
+	line-height: 1.1;
+	color: rgba(0, 0, 0, 0.6);               /* 站点默认文字颜色 */
+	text-decoration: underline;   /* 默认即有下划线 */
+	text-underline-offset: 1px;
+	background: #fff;
+	transition: color .15s;
+}
+.tm-bubble .tm-article-link:hover {
+	color: rgb(224, 112, 10);     /* 悬停橙色 */
+	text-decoration: underline;
+}
+
+/* 所有气泡中，最后一个直接子元素（无论是什么）增加底部间距 */
+.tm-bubble > :last-child {
+	margin-bottom: 10px;
+}
+
+/* 用户偏好减弱动态效果时：关闭气泡关闭按钮/链接的过渡 */
+@media (prefers-reduced-motion: reduce) {
+	.tm-bubble .tm-close,
+	.tm-bubble .tm-article-link {
+		transition: none;
+	}
+}
+
+/* 版权/Logo 定位保持高德默认即可，无需额外样式 */

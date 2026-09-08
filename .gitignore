@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# 编辑器 / 系统
+*.swp
+*.swo
+*~
+
+# WorkBuddy 本地数据（勿提交）
+.workbuddy/
+
+# 打包产物 / 发布安装包（需要可分发的 zip 时手动构建，不入库）
+*.zip

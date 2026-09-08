@@ -1,0 +1,444 @@
+/* =========================================================
+   FootprintMap 后台 — 地点标记管理页样式
+   ========================================================= */
+.footprintmap-transfer {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-left: 4px solid #72aee6;
+	padding: 8px 16px 12px;
+	margin: 14px 0 6px;
+	box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+.tm-transfer-title {
+	margin: 6px 0 8px;
+	font-size: 14px;
+}
+.tm-transfer-btns {
+	display: flex;
+	gap: 18px;
+	align-items: center;
+	flex-wrap: wrap;
+	margin-bottom: 6px;
+}
+.tm-inline-form {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	flex-wrap: wrap;
+}
+.tm-file {
+	max-width: 280px;
+}
+.tm-transfer-note {
+	color: #50575e;
+	font-size: 12px;
+	margin: 4px 0;
+}
+.tm-transfer-enc {
+	color: #666;
+	font-size: 12px;
+	background: #f0f6fc;
+	border: 1px solid #c5d9ed;
+	border-radius: 3px;
+	padding: 8px 10px;
+	margin: 6px 0 2px;
+}
+.tm-transfer-enc strong { color: #2271b1; }
+.footprintmap-admin-layout {
+	display: flex;
+	gap: 20px;
+	margin-top: 16px;
+	align-items: flex-start;
+	flex-wrap: wrap; /* 窄屏允许换行堆叠 */
+}
+.footprintmap-admin-map-col {
+	flex: 1 1 62%;
+	min-width: 0;
+}
+.footprintmap-admin-form-col {
+	flex: 1 1 38%;
+	min-width: 320px; /* 表单列不因太窄而挤压内容 */
+	background: #fff;
+	border: 1px solid #dcdcde;
+	padding: 0 16px 8px;
+	box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+/* 窄屏：两栏改单列堆叠、降低地图高度，避免互相挤压 */
+@media (max-width: 1200px) {
+	.footprintmap-admin-map-col,
+	.footprintmap-admin-form-col {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+	.footprintmap-admin-map {
+		height: 420px;
+	}
+}
+.footprintmap-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+.footprintmap-search {
+	width: 260px;
+}
+.footprintmap-tip {
+	color: #666;
+	font-size: 12px;
+}
+.footprintmap-admin-map {
+	width: 100%;
+	height: 560px;
+	background: #e5e3df;
+	border: 1px solid #c3c4c7;
+	position: relative; /* 供右上角 + - home 控件绝对定位 */
+}
+
+/* 右上角 + - home 缩放控件（与前台地图一致） */
+.tm-zoomctrl {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	z-index: 80;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border-radius: 3px;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+	overflow: hidden;
+}
+.tm-zoomctrl button {
+	width: 34px;
+	height: 34px;
+	border: none;
+	background: #fff;
+	color: #2c3e50;
+	font-size: 20px;
+	line-height: 1;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+.tm-zoomctrl button + button {
+	border-top: 1px solid #e6e6e6;
+}
+.tm-zoomctrl button:hover {
+	background: #f2f4f7;
+	color: #e1341e;
+}
+.tm-zoomctrl button svg {
+	width: 18px;
+	height: 18px;
+	fill: currentColor;
+}
+
+/* 右侧地点信息表单 */
+.footprintmap-admin-form-col label {
+	font-weight: 600;
+	display: block;
+	margin-bottom: 4px;
+}
+.footprintmap-row {
+	display: flex;
+	gap: 12px;
+}
+.footprintmap-row p {
+	flex: 1;
+}
+.footprintmap-actions {
+	margin-top: 18px;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.footprintmap-hidden {
+	display: none !important;
+}
+.footprintmap-msg {
+	margin-top: 8px;
+	font-weight: 600;
+}
+.footprintmap-msg.ok { color: #46b450; }
+.footprintmap-msg.err { color: #dc3232; }
+
+/* 关联文章：搜索建议下拉 / 已选列表 */
+.footprintmap-post-search-wrap {
+	position: relative;
+}
+.footprintmap-suggest {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 100%;
+	z-index: 1000;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-top: none;
+	display: none;
+	max-height: 240px;
+	overflow: auto;
+	box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.footprintmap-suggest.open { display: block; }
+.footprintmap-suggest-item {
+	padding: 8px 10px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	border-bottom: 1px solid #f0f0f1;
+}
+.footprintmap-suggest-item:hover { background: #f6f7f7; }
+.footprintmap-suggest-item img { width: 40px; height: 30px; object-fit: cover; }
+.footprintmap-suggest-item .title { flex: 1; }
+.footprintmap-suggest-empty { padding: 10px; color: #666; }
+
+.footprintmap-linked {
+	margin-top: 6px;
+	border: 1px dashed #c3c4c7;
+	padding: 8px;
+	min-height: 20px;
+}
+.footprintmap-empty { color: #999; margin: 4px 0; }
+.footprintmap-linked-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: #f0f6fc;
+	border: 1px solid #c5d9ed;
+	border-radius: 3px;
+	padding: 6px 8px;
+	margin-bottom: 6px;
+}
+.footprintmap-linked-item img { width: 48px; height: 34px; object-fit: cover; }
+.footprintmap-linked-item .t { flex: 1; font-weight: 500; }
+.footprintmap-linked-item .remove {
+	cursor: pointer;
+	color: #b32d2e;
+	font-weight: 700;
+	background: none;
+	border: none;
+	font-size: 15px;
+}
+
+/* 已标记地点列表（含分页 / 排序表头） */
+.footprintmap-locations-list {
+	margin-top: 24px;
+}
+.footprintmap-list-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin: 8px 0 10px;
+}
+.footprintmap-filter-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	color: #1d2327;
+}
+.footprintmap-region-filter {
+	min-width: 180px;
+}
+.footprintmap-list-count {
+	color: #646970;
+	font-size: 12px;
+}
+.footprintmap-sortable {
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+}
+.footprintmap-sortable:hover {
+	color: #2271b1;
+}
+.footprintmap-sort-indicator {
+	display: inline-block;
+	min-width: 12px;
+	margin-left: 2px;
+	font-weight: 700;
+	color: #2271b1;
+}
+.footprintmap-pagination {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+}
+.footprintmap-page-info {
+	color: #50575e;
+	font-size: 13px;
+}
+.footprintmap-page-btn:disabled {
+	opacity: .5;
+	cursor: not-allowed;
+}
+.footprintmap-locations-list th,
+.footprintmap-locations-list td {
+	vertical-align: middle;
+}
+.footprintmap-edit-link {
+	cursor: pointer;
+	color: #2271b1;
+	text-decoration: none;
+}
+.footprintmap-edit-link:hover {
+	text-decoration: underline;
+}
+.footprintmap-field {
+	margin: 1em 0;
+}
+.footprintmap-field .widefat {
+	margin-top: 2px;
+}
+#footprintmap-post-select {
+	min-height: 34px;
+}
+.footprintmap-field .description {
+	font-size: 12px;
+	color: #646970;
+	margin: 4px 0;
+}
+.footprintmap-delete-link {
+	cursor: pointer;
+	color: #b32d2e;
+}
+.footprintmap-no-rows {
+	text-align: center;
+	color: #999;
+	padding: 16px !important;
+}
+
+/* 默认点位图片选择器（媒体库） */
+.footprintmap-media-picker {
+	margin: 4px 0;
+}
+.footprintmap-media-preview {
+	margin-bottom: 8px;
+}
+.footprintmap-media-preview img {
+	max-width: 40px;
+	max-height: 40px;
+	border-radius: 50%;
+	border: 1px solid #c3c4c7;
+	box-shadow: 0 1px 3px rgba(0,0,0,.12);
+	object-fit: cover;
+	display: block;
+}
+.footprintmap-media-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+/* 地图上的点位与聚合标记 */
+.tm-admin-dotmark {
+	width: 14px; height: 14px;
+	border-radius: 50%;
+	background: #e1341e;
+	border: 1px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, .18), 0 2px 5px rgba(0, 0, 0, .28);
+	opacity: .8;
+	cursor: pointer;
+}
+.tm-admin-cluster {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 4px;
+	border-radius: 10px;
+	background: radial-gradient(circle at 32% 30%, #ff6b54, #d92f16 70%, #b91f08);
+	color: #fff;
+	border: 1px solid #fff;
+	font-size: 11px;
+	font-weight: 700;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 3px 7px rgba(0, 0, 0, .3);
+	cursor: pointer;
+	user-select: none;
+	opacity: .8;
+}
+
+/* 聚合圆点信息窗（选择地点编辑） */
+.tm-admin-infobox {
+	width: 220px;
+	max-height: 280px;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+	position: relative;
+}
+.tm-admin-infobox .tm-admin-close {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 5;
+	width: 20px;
+	height: 20px;
+	line-height: 1;
+	background: rgba(0, 0, 0, .45);
+	border: none;
+	color: #fff;
+	font-size: 15px;
+	border-radius: 50%;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.tm-admin-infobox .tm-admin-close:hover {
+	background: rgba(0, 0, 0, .72);
+}
+.tm-admin-infobox-title {
+	padding: 9px 30px 7px 12px;
+	font-weight: 600;
+	font-size: 13px;
+	color: #1d2327;
+	line-height: 1.4;
+}
+.tm-admin-infobox-list {
+	overflow-y: auto;
+	padding: 0 0 6px;
+}
+.tm-admin-cluster-item {
+	padding: 7px 12px;
+	font-size: 13px;
+	color: #2271b1;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.tm-admin-cluster-item:hover {
+	background: #f0f6fc;
+}
+.tm-picker-marker {
+	width: 14px; height: 14px;
+	border-radius: 50%;
+	background: #1677ff;
+	border: 1px solid #fff;
+	box-shadow: 0 0 0 1px rgba(22,119,255,.8), 0 2px 5px rgba(0,0,0,.28);
+	animation: tm-pulse 1.4s ease-out infinite;
+}
+@keyframes tm-pulse {
+	0% { box-shadow: 0 0 0 1px rgba(22,119,255,.8), 0 0 0 0 rgba(22,119,255,.4); }
+	70% { box-shadow: 0 0 0 1px rgba(22,119,255,.8), 0 0 0 8px rgba(22,119,255,0); }
+	100% { box-shadow: 0 0 0 1px rgba(22,119,255,.8), 0 0 0 0 rgba(22,119,255,0); }
+}
+/* 用户偏好减弱动态效果时：关闭脉冲动画与过渡 */
+@media (prefers-reduced-motion: reduce) {
+	.tm-picker-marker {
+		animation: none;
+	}
+}
