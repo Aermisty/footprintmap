@@ -11,26 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $saved = footprintmap()->get_settings();
 
-// 保存：显式校验权限（防御纵深——不依赖渲染入口的 manage_options 检查）+ nonce。
-if ( isset( $_POST['submit'] ) && current_user_can( 'manage_options' ) && check_admin_referer( 'footprintmap_settings' ) ) {
-	$new = array(
-		'key'              => isset( $_POST['amap_key'] ) ? sanitize_text_field( wp_unslash( $_POST['amap_key'] ) ) : '',
-		'jscode'           => isset( $_POST['amap_jscode'] ) ? sanitize_text_field( wp_unslash( $_POST['amap_jscode'] ) ) : '',
-		'cluster_distance' => isset( $_POST['cluster_distance'] ) ? absint( $_POST['cluster_distance'] ) : 50,
-		'post_tag'         => isset( $_POST['post_tag'] ) ? sanitize_text_field( wp_unslash( $_POST['post_tag'] ) ) : '',
-		'default_image'    => isset( $_POST['default_image'] ) ? absint( $_POST['default_image'] ) : 0,
-	);
-	if ( $new['cluster_distance'] < 10 ) {
-		$new['cluster_distance'] = 50;
-	}
-	// post_tag 允许为空：留空表示后台“关联文章”下拉列出全部文章（不限标签）。
-	// （默认即留空=列出全部文章；用户在此填入标签名即改为按标签过滤。）
-	update_option( 'footprintmap_settings', $new );
-	$saved  = $new;
-	$notice = __( '设置已保存。', 'footprintmap' );
-}
-
-$notice = isset( $notice ) ? $notice : '';
+// 保存处理已移至主类 handle_settings_save()（load-{page} 钩子，早于输出），
+// 保存后 PRG 重定向回本页并带 settings-updated=1，此处仅负责展示提示。
+$updated = isset( $_GET['settings-updated'] ) ? sanitize_key( wp_unslash( $_GET['settings-updated'] ) ) : '';
+$notice  = ( '1' === $updated ) ? __( '设置已保存。', 'footprintmap' ) : '';
 ?>
 <div class="wrap">
 	<h1><?php esc_html_e( '足迹地图 — 地图设置', 'footprintmap' ); ?></h1>
@@ -79,7 +63,7 @@ $notice = isset( $notice ) ? $notice : '';
 				</th>
 				<td>
 					<input type="text" id="post_tag" name="post_tag" class="regular-text" value="<?php echo esc_attr( $saved['post_tag'] ); ?>" />
-					<p class="description"><?php esc_html_e( '后台设置地点「关联文章」时，下拉框允许仅显示包含指定标签的文章。输入多个标签用英文逗号分隔（如 旅行,攻略），匹配任一标签即列出。留空则显示全部文章。', 'footprintmap' ); ?></p>
+					<p class="description"><?php esc_html_e( '后台设置地点「关联文章」时，下拉框允许仅显示带指定标签的文章。输入多个标签用英文逗号分隔（如 旅行,攻略），标签名需与文章标签完全一致（不做子串模糊匹配），命中任一标签即列出。留空则显示全部文章。', 'footprintmap' ); ?></p>
 				</td>
 			</tr>
 			<tr>

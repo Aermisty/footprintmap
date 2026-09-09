@@ -9,6 +9,16 @@
 	var frame = null;
 	var booted = false;
 
+	// 属性转义（纵深防御）：媒体库 URL 虽可信，拼 HTML 时仍应转义
+	function escAttr(s) {
+		return String(s)
+			.replace(/&/g, '&amp;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;');
+	}
+
 	function mediaReady() {
 		return !!(window.wp && window.wp.media);
 	}
@@ -32,7 +42,7 @@
 			} else {
 				url = att.url;
 			}
-			preview.innerHTML = '<img src="' + url + '" alt="" />';
+			preview.innerHTML = '<img src="' + escAttr(url) + '" alt="" />';
 			preview.style.display = '';
 		}
 

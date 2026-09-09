@@ -8,7 +8,10 @@
 	var cfg = window.FootprintMapAdmin || {};
 	var map = null;
 	var pickedMarker = null;   // 当前待保存的临时标记
-	var currentId = 0;         // 正在编辑的地点 id (0=新建)
+	var currentId = 0;         // 表单当前绑定的地点 id (0=新建)；区分于 currentMode
+	var currentMode = 'new';   // 表单模式: 'new' 新建 / 'view' 浏览(只读) / 'edit' 编辑(可写)
+	var currentLoc = null;     // view/edit 模式下表单对应的源地点对象（用于退出编辑时还原）
+	var pendingViewId = 0;     // 保存后待重新载入查看的地点 id（编辑保存成功后回到该点浏览态）
 	var allLocations = [];     // 后台所有地点的数据列表
 	var mapMarkers = [];       // 当前渲染到地图上的 marker（含聚合圆点）
 	var clusterInfoWin = null; // 聚合圆点点击后弹出的地点选择信息窗（单例）
@@ -118,8 +121,24 @@
 		});
 
 		map.on('click', function (e) {
-			var lnglat = e.lnglat;
-			placePicker(lnglat.getLng(), lnglat.getLat());
+			var lng = e.lnglat.getLng(), lat = e.lnglat.getLat();
+			// 浏览(view)态点击空白：退出当前地点的浏览（完全重置为全新空表单），
+			// 并把本次点击位置作为新地点的候选点。
+			if (currentMode === 'view') {
+				enterNew();
+				placePicker(lng, lat);
+				return;
+			}
+			// 新建态已输入名称/关联文章时，点空白换点前先确认是否放弃；
+			// 用户明确点"确定放弃"才完全清空（含名称与已填地理字段）后重新落点。
+			var abandoned = false;
+			if (currentMode === 'new' && hasUnsavedNewContent()) {
+				if (!window.confirm(cfg.i18n.confirmDiscardNew)) return;
+				abandoned = true;
+			}
+			if (abandoned) enterNew();
+			// 点空白重新定位：清空地理字段，由反查回填当前点国家/省市（国外点留空待手填）。
+			placePicker(lng, lat);
 		});
 
 		// 缩放动画结束 / 平移结束后一次性重新聚合渲染。
@@ -137,7 +156,24 @@
 				city: '全国'
 			});
 			ac.on('select', function (e) {
-				var loc = e.poi.location;
+				var loc = e.poi && e.poi.location;
+				// 部分 POI 结果可能没有坐标，直接放点会抛错中断搜索功能
+				if (!loc || isNaN(loc.lng) || isNaN(loc.lat)) return;
+				// 浏览态下用搜索选点是"新建"意图 → 完全重置为空表单再放置
+				if (currentMode === 'view') {
+					enterNew();
+					map.setZoomAndCenter(12, [loc.lng, loc.lat]);
+					placePicker(loc.lng, loc.lat);
+					return;
+				}
+				// 新建态已有未保存内容时，搜索跳转前先确认是否放弃；
+				// 明确放弃才清空，否则只重新定位并清空地理字段待反查回填。
+				var abandoned = false;
+				if (currentMode === 'new' && hasUnsavedNewContent()) {
+					if (!window.confirm(cfg.i18n.confirmDiscardNew)) return;
+					abandoned = true;
+				}
+				if (abandoned) enterNew();
 				map.setZoomAndCenter(12, [loc.lng, loc.lat]);
 				placePicker(loc.lng, loc.lat);
 			});
@@ -165,6 +201,9 @@
 	}
 
 	/* 在地图上放置选点标记并反地理编码获取省市国家 */
+	// 在地图上放置选点标记并反地理编码回填国家/省市。
+	// 统一语义：点选/换点即视为“重新定位地点”，一律先清空地理字段等反查回填；
+	// 国外点高德反查通常不返回，留空便于用户手工录入国家/省市。
 	function placePicker(lng, lat) {
 		clearPicker();
 		pickedMarker = new AMap.Marker({
@@ -176,8 +215,7 @@
 		pickedMarker.setMap(map);
 
 		setCoords(lng, lat);
-		// 新选点时先清空地理字段：等 reverseGeocode 回填；
-		// 国外点高德通常不返回，留空便于用户手工录入国家/城市。
+		// 清空地理字段，等 reverseGeocode 回填。
 		$('loc-country').value = '';
 		$('loc-province').value = '';
 		$('loc-city').value = '';
@@ -196,11 +234,16 @@
 	}
 
 	/* 反地理编码：填充国家/省份/城市 */
+	// 竞态守卫：快速连续选点时，旧请求可能晚于新请求返回；
+	// geoSeq 自增后回调比对序号，过期响应直接丢弃，防止旧点地名回填到新点。
+	var geoSeq = 0;
 	function reverseGeocode(lng, lat) {
 		// Geocoder 为可选插件，未就绪时跳过（不影响选点与保存）。
 		if (!window.AMap || !AMap.Geocoder) return;
+		var seq = ++geoSeq;
 		var geocoder = new AMap.Geocoder({ radius: 1000 });
 		geocoder.getAddress([lng, lat], function (status, result) {
+			if (seq !== geoSeq) return; // 已有更新的选点，丢弃过期结果
 			if (status === 'complete' && result.regeocode) {
 				var ac = result.regeocode.addressComponent;
 				var country = ac.country || '';
@@ -213,7 +256,7 @@
 				// 但部分点不返回 country，此时据 province 判定为国内并补“中国”；
 				// 国外点高德不返回中国省份，province 为空，则国家留空让用户手录，
 				// 避免被误标成“中国”。
-				if (!country && province) { country = '中国'; }
+					if (!country && province) { country = '中国'; }
 				if (country) { $('loc-country').value = country; }
 				if (province) { $('loc-province').value = province; }
 				if (city) { $('loc-city').value = city; }
@@ -230,7 +273,12 @@
 		var xhr = new XMLHttpRequest();
 		xhr.open('GET', cfg.ajaxUrl + '?action=footprintmap_get_locations&nonce=' + encodeURIComponent(cfg.nonce));
 		xhr.onload = function () {
-			if (xhr.status !== 200) return;
+			// 403（nonce 过期）/500 等失败要给出可见提示，不能静默失败
+			// 让用户误以为操作成功而数据未刷新。
+			if (xhr.status !== 200) {
+				showMsg(cfg.i18n.sessionExpired || '请求失败，请刷新页面重试', false);
+				return;
+			}
 			try {
 				var res = JSON.parse(xhr.responseText);
 				if (res && res.success) {
@@ -238,8 +286,19 @@
 					dataFetched = true;
 					renderLocationList(allLocations);
 					renderMarkersIfReady();
+					// 编辑保存成功后，重新载入该点回到浏览态（刷新到最新值）
+					if (pendingViewId) {
+						var v = allLocations.find(function (l) { return Number(l.id) === Number(pendingViewId); });
+						pendingViewId = 0;
+						if (v) loadIntoForm(v);
+					}
 				}
-			} catch (e) {}
+			} catch (e) {
+				showMsg(cfg.i18n.error || '保存失败', false);
+			}
+		};
+		xhr.onerror = function () {
+			showMsg(cfg.i18n.sessionExpired || '请求失败，请刷新页面重试', false);
 		};
 		xhr.send();
 	}
@@ -491,7 +550,12 @@
 		var tbody = document.querySelector('#footprintmap-locations-table tbody');
 		tbody.innerHTML = '';
 		if (!pageItems.length) {
-			tbody.innerHTML = '<tr><td colspan="7" class="footprintmap-no-rows">' + esc(cfg.i18n.noMatch ? '没有符合筛选条件的地点。' : '暂无地点') + '</td></tr>';
+			// 有筛选条件 → "没有符合筛选条件"；无筛选 → "暂无地点"。
+			// 旧逻辑 cfg.i18n.noMatch 恒为真，导致无任何地点时也显示筛选提示。
+			var emptyMsg = regionFilter
+				? (cfg.i18n.noMatch || '没有符合筛选条件的地点。')
+				: (cfg.i18n.noLocations || '暂无地点');
+			tbody.innerHTML = '<tr><td colspan="5" class="footprintmap-no-rows">' + esc(emptyMsg) + '</td></tr>';
 		} else {
 			pageItems.forEach(function (loc) {
 				var tr = document.createElement('tr');
@@ -500,10 +564,8 @@
 					'<td><a class="footprintmap-edit-link" data-id="' + loc.id + '">' + esc(loc.name) + '</a></td>' +
 					'<td>' + esc(regionOf(loc) || '-') + '</td>' +
 					'<td>' + esc(loc.city || '-') + '</td>' +
-					'<td>' + loc.lng.toFixed(4) + '</td>' +
-					'<td>' + loc.lat.toFixed(4) + '</td>' +
 					'<td>' + postsCount + '</td>' +
-					'<td><span class="footprintmap-delete-link" data-id="' + loc.id + '" data-name="' + esc(loc.name) + '">' + esc(cfg.i18n.delete) + '</span></td>';
+					'<td><span class="footprintmap-delete-link" data-id="' + loc.id + '">' + esc(cfg.i18n.delete) + '</span></td>';
 				tbody.appendChild(tr);
 			});
 
@@ -586,8 +648,12 @@
 	// ============================================================
 	// 编辑：把一条记录载入表单
 	// ============================================================
-	function loadIntoForm(loc) {
+	// ---- 表单三态控制（new 新建 / view 浏览只读 / edit 编辑可写）----
+
+	// 将某地点数据填进表单（不改变模式）
+	function fillForm(loc) {
 		currentId = loc.id;
+		currentLoc = loc;
 		$('loc-id').value = loc.id;
 		$('loc-name').value = loc.name;
 		$('loc-country').value = loc.country || '';
@@ -596,16 +662,109 @@
 		setCoords(loc.lng, loc.lat);
 		pendingPosts = (loc.post_ids || []).slice();
 		// 填充 postMeta（标题/缩略图）
+		postMeta = {};
 		(loc.posts || []).forEach(function (p) {
 			postMeta[p.id] = { title: p.title, thumb: p.thumb || '' };
 		});
 		renderLinkedPosts();
-
-		$('footprintmap-delete-btn').classList.remove('footprintmap-hidden');
-
 		// 定位到该点并放大到可拆开单点的层级
 		clearPicker();
 		if (map) map.setZoomAndCenter(8, [loc.lng, loc.lat]);
+	}
+
+	// 切换表单字段的可编辑/只读，并显示对应模式横幅与按钮
+	function setMode(mode) {
+		currentMode = mode;
+		var editable = (mode !== 'view');
+		var form = $('footprintmap-location-form');
+		var flds = ['loc-name', 'loc-country', 'loc-province', 'loc-city',
+			'loc-lng-display', 'loc-lat-display'];
+		flds.forEach(function (id) {
+			var el = $(id);
+			if (!el) return;
+			el.readOnly = !editable;
+		});
+		if (selectPost) selectPost.disabled = !editable;
+		// 关联文章删除按钮只读模式下禁用
+		if (form) form.classList.toggle('tm-viewmode', mode === 'view');
+
+		var bar = $('footprintmap-mode-bar');
+		if (bar) {
+			bar.className = 'footprintmap-mode mode-' + mode;
+			var label = '';
+			if (mode === 'new') label = (cfg.i18n.modeNew || '新建地点');
+			else if (mode === 'view') {
+				label = (cfg.i18n.modeView || '浏览：%s').replace('%s',
+					(currentLoc && currentLoc.name) || '');
+			} else {
+				label = (cfg.i18n.modeEdit || '编辑：%s').replace('%s',
+					(currentLoc && currentLoc.name) || '');
+			}
+			bar.innerHTML = '<span class="fp-mode-ico">' +
+				(mode === 'new' ? '➕' : (mode === 'view' ? '👁️' : '✏️')) + '</span> ' +
+				esc(label);
+		}
+
+		// 按钮显隐
+		toggle('footprintmap-edit-btn', mode === 'view');          // 仅浏览时出现「编辑此地点」
+		toggle('footprintmap-exit-edit-btn', mode === 'edit');     // 仅编辑时出现「退出编辑」
+		toggle('footprintmap-save-btn', mode !== 'view');          // 浏览不显示保存
+		toggle('footprintmap-delete-btn', mode === 'edit');        // 仅编辑时可删除
+	}
+
+	function toggle(id, show) {
+		var el = $(id);
+		if (el) el.classList.toggle('footprintmap-hidden', !show);
+	}
+
+	// 新建态"未保存内容"守卫：若正在新建且已输入地点名称或已关联文章，
+	// 新建(new)态是否存在未保存的实质内容（名称或关联文章）。
+	// 注意：地理字段（国家/省份/城市）不算"实质内容"——点空白换点会保留它们，无需弹窗。
+	function hasUnsavedNewContent() {
+		if (currentMode !== 'new') return false;
+		return $('loc-name').value.trim() !== '' || pendingPosts.length > 0;
+	}
+
+	// 有未保存内容时弹窗确认是否放弃（点"确定"允许离开，点"取消"停留在当前新建点）。
+	// 非新建态（浏览/编辑）一律放行，不打断。
+	function confirmDiscardNew() {
+		if (!hasUnsavedNewContent()) return true;
+		return window.confirm(cfg.i18n.confirmDiscardNew);
+	}
+
+	// 浏览（只读）某点：从列表/地图标记/聚合窗点入时进入
+	function loadIntoForm(loc) {
+		// 若正从"未保存的新建点"切换过来，先确认是否放弃
+		if (!confirmDiscardNew()) return;
+		fillForm(loc);
+		setMode('view');
+	}
+
+	// 编辑某点（可写）
+	function enterEdit(loc) {
+		fillForm(loc);
+		setMode('edit');
+	}
+
+	// 返回新建态
+	function enterNew() {
+		currentId = 0;
+		currentLoc = null;
+		$('loc-id').value = 0;
+		$('loc-name').value = '';
+		$('loc-province').value = '';
+		$('loc-country').value = '';
+		$('loc-city').value = '';
+		$('loc-lng-display').value = '';
+		$('loc-lat-display').value = '';
+		$('loc-lng').value = '';
+		$('loc-lat').value = '';
+		pendingPosts = [];
+		postMeta = {};
+		renderLinkedPosts();
+		clearPicker();
+		$('footprintmap-save-msg').textContent = '';
+		setMode('new');
 	}
 
 	// ============================================================
@@ -702,6 +861,9 @@
 
 	function doSave(e) {
 		e.preventDefault();
+		// 浏览(view)态禁止保存：保存按钮虽已隐藏（display:none），但按 Enter
+		// 仍会触发表单隐式提交（按钮仍在 DOM 中作为默认提交按钮）。
+		if (currentMode === 'view') return;
 		var name = $('loc-name').value.trim();
 		var lng = parseFloat($('loc-lng').value);
 		var lat = parseFloat($('loc-lat').value);
@@ -728,9 +890,15 @@
 				var res = JSON.parse(xhr.responseText);
 				if (res.success) {
 					showMsg(cfg.i18n.saved, true);
-					loadAllLocations();
-					// 重置为"新建"状态，避免下次误更新
-					resetFormForNew();
+					// 编辑保存 → 重新载入该点回到"浏览"（只读、显示最新值）；
+					// 新建保存 → 回"新建"以便继续录下一个。
+					if (currentMode === 'edit' && currentId) {
+						pendingViewId = currentId;
+						loadAllLocations();
+					} else {
+						loadAllLocations();
+						enterNew();
+					}
 				} else {
 					showMsg(res.data && res.data.message ? res.data.message : cfg.i18n.error, false);
 				}
@@ -754,7 +922,7 @@
 			if (ok) {
 				showMsg(cfg.i18n.deleted || '已删除', true);
 				loadAllLocations();
-				resetFormForNew();
+				enterNew();
 			} else {
 				showMsg(cfg.i18n.deleteError || '删除失败，请重试', false);
 			}
@@ -765,25 +933,6 @@
 		xhr.send('action=footprintmap_delete_location&id=' + id + '&nonce=' + encodeURIComponent(cfg.nonce));
 	}
 
-	function resetFormForNew() {
-		currentId = 0;
-		$('loc-id').value = 0;
-		$('loc-name').value = '';
-		$('loc-province').value = '';
-		$('loc-country').value = '';
-		$('loc-city').value = '';
-		$('loc-lng-display').value = '';
-		$('loc-lat-display').value = '';
-		$('loc-lng').value = '';
-		$('loc-lat').value = '';
-		pendingPosts = [];
-		postMeta = {};
-		renderLinkedPosts();
-		clearPicker();
-		$('footprintmap-delete-btn').classList.add('footprintmap-hidden');
-		$('footprintmap-save-msg').textContent = '';
-	}
-
 	// ============================================================
 	// events
 	// ============================================================
@@ -791,8 +940,19 @@
 		var form = $('footprintmap-location-form');
 		if (form) form.addEventListener('submit', doSave);
 
-		var clearBtn = $('footprintmap-clear-btn');
-		if (clearBtn) clearBtn.addEventListener('click', function () { resetFormForNew(); });
+		// 「编辑此地点」：浏览态点击 → 进入可写编辑（保留当前点）
+		var editBtn = $('footprintmap-edit-btn');
+		if (editBtn) editBtn.addEventListener('click', function () {
+			if (currentMode !== 'view' || !currentLoc) return;
+			enterEdit(currentLoc);
+		});
+
+		// 「退出编辑」：编辑态点击 → 放弃未保存修改，回到该点的浏览态
+		var exitBtn = $('footprintmap-exit-edit-btn');
+		if (exitBtn) exitBtn.addEventListener('click', function () {
+			if (currentMode !== 'edit' || !currentLoc) return;
+			loadIntoForm(currentLoc); // 重新从源地点填充（即放弃修改），回到只读
+		});
 
 		var delBtn = $('footprintmap-delete-btn');
 		if (delBtn) delBtn.addEventListener('click', function () {
@@ -831,6 +991,8 @@
 			return; // 非地图管理页（无本地化数据），无需初始化
 		}
 		bind();
+		// 初始为"新建"态：字段可写、横幅提示新建、仅显示保存/清空
+		enterNew();
 		initData();
 	}
 

@@ -52,7 +52,7 @@ if ( $imp_res ) {
 	$admin_post   = admin_url( 'admin-post.php' );
 	?>
 	<div class="footprintmap-transfer">
-		<h2 class="tm-transfer-title"><?php esc_html_e( '点位数据 导入 / 导出', 'footprintmap' ); ?></h2>
+		<h2 class="tm-transfer-title"><?php esc_html_e( '地点数据 导入 / 导出', 'footprintmap' ); ?></h2>
 
 		<div class="tm-transfer-btns">
 			<form method="post" action="<?php echo esc_url( $admin_post ); ?>" class="tm-inline-form">
@@ -112,6 +112,7 @@ if ( $imp_res ) {
 
 			<div class="footprintmap-admin-form-col">
 				<h2><?php esc_html_e( '地点信息', 'footprintmap' ); ?></h2>
+				<div id="footprintmap-mode-bar" class="footprintmap-mode mode-new"></div>
 				<form id="footprintmap-location-form">
 					<input type="hidden" id="loc-id" name="id" value="0" />
 					<input type="hidden" id="loc-lat" name="lat" value="" />
@@ -170,9 +171,10 @@ if ( $imp_res ) {
 					</div>
 
 					<p class="footprintmap-actions">
-						<button type="submit" class="button button-primary"><?php esc_html_e( '保存地点', 'footprintmap' ); ?></button>
+						<button type="submit" id="footprintmap-save-btn" class="button button-primary"><?php esc_html_e( '保存地点', 'footprintmap' ); ?></button>
+						<button type="button" id="footprintmap-exit-edit-btn" class="button footprintmap-hidden"><?php esc_html_e( '退出编辑', 'footprintmap' ); ?></button>
+						<button type="button" id="footprintmap-edit-btn" class="button footprintmap-hidden"><?php esc_html_e( '编辑此地点', 'footprintmap' ); ?></button>
 						<button type="button" id="footprintmap-delete-btn" class="button button-link-delete footprintmap-hidden"><?php esc_html_e( '删除该地点', 'footprintmap' ); ?></button>
-						<button type="button" id="footprintmap-clear-btn" class="button"><?php esc_html_e( '清空', 'footprintmap' ); ?></button>
 					</p>
 					<div id="footprintmap-save-msg" class="footprintmap-msg"></div>
 				</form>
@@ -196,8 +198,6 @@ if ( $imp_res ) {
 						<th><?php esc_html_e( '名称', 'footprintmap' ); ?></th>
 						<th><?php esc_html_e( '省份/国家', 'footprintmap' ); ?></th>
 						<th><?php esc_html_e( '城市', 'footprintmap' ); ?></th>
-						<th><?php esc_html_e( '经度', 'footprintmap' ); ?></th>
-						<th><?php esc_html_e( '纬度', 'footprintmap' ); ?></th>
 						<th class="footprintmap-sortable" id="footprintmap-post-count-th">
 							<span><?php esc_html_e( '文章数', 'footprintmap' ); ?></span>
 							<span class="footprintmap-sort-indicator" id="footprintmap-sort-indicator"></span>

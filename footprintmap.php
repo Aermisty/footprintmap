@@ -61,9 +61,11 @@ final class FootprintMap {
 		// 后台钩子。
 		add_action( 'admin_menu', array( $this, 'register_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
+		// 设置页保存放在 load-{page} 钩子（早于任何输出），便于保存后 PRG 重定向，
+		// 避免"刷新页面重复提交 POST"。
+		add_action( 'load-footprintmap_page_footprintmap-settings', array( $this, 'handle_settings_save' ) );
 		add_action( 'wp_ajax_footprintmap_save_location', array( $this, 'ajax_save_location' ) );
 		add_action( 'wp_ajax_footprintmap_delete_location', array( $this, 'ajax_delete_location' ) );
-		add_action( 'wp_ajax_footprintmap_search_posts', array( $this, 'ajax_search_posts' ) );
 		add_action( 'wp_ajax_footprintmap_get_locations', array( $this, 'ajax_get_locations' ) );
 
 		// 导入 / 导出（走 admin-post 的页面表单提交）。
@@ -222,6 +224,37 @@ final class FootprintMap {
 		require FOOTPRINTMAP_DIR . 'admin/settings-page.php';
 	}
 
+	/**
+	 * 设置页保存处理（挂在 load-{page} 钩子，早于页面输出）。
+	 *
+	 * 保存成功后 PRG 重定向（Post/Redirect/Get），刷新页面不会重复提交表单。
+	 */
+	public function handle_settings_save() {
+		if ( ! isset( $_POST['submit'] ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( '权限不足。', 'footprintmap' ) );
+		}
+		check_admin_referer( 'footprintmap_settings' );
+
+		$new = array(
+			'key'              => isset( $_POST['amap_key'] ) ? sanitize_text_field( wp_unslash( $_POST['amap_key'] ) ) : '',
+			'jscode'           => isset( $_POST['amap_jscode'] ) ? sanitize_text_field( wp_unslash( $_POST['amap_jscode'] ) ) : '',
+			'cluster_distance' => isset( $_POST['cluster_distance'] ) ? absint( $_POST['cluster_distance'] ) : 50,
+			'post_tag'         => isset( $_POST['post_tag'] ) ? sanitize_text_field( wp_unslash( $_POST['post_tag'] ) ) : '',
+			'default_image'    => isset( $_POST['default_image'] ) ? absint( $_POST['default_image'] ) : 0,
+		);
+		if ( $new['cluster_distance'] < 10 ) {
+			$new['cluster_distance'] = 50;
+		}
+		// post_tag 允许为空：留空表示后台"关联文章"下拉列出全部文章（不限标签）。
+		update_option( 'footprintmap_settings', $new );
+
+		wp_safe_redirect( add_query_arg( 'settings-updated', '1', admin_url( 'admin.php?page=footprintmap-settings' ) ) );
+		exit;
+	}
+
 	/* ================================================================
 	 * 后台静态资源加载
 	 * ================================================================ */
@@ -289,8 +322,6 @@ final class FootprintMap {
 			'posts'       => $is_map_page ? $this->get_tagged_posts() : array(),
 			'i18n'        => array(
 				'pleaseClick' => __( '请在地图上点击选择地点（可直接拖动地图再点选）', 'footprintmap' ),
-				'searchPlaceholder' => __( '搜索地点/城市后点选…', 'footprintmap' ),
-				'save' => __( '保存标记', 'footprintmap' ),
 				'delete' => __( '删除', 'footprintmap' ),
 				'confirmDelete' => __( '确定删除该地点吗？', 'footprintmap' ),
 				'inputName' => __( '请输入地点名称', 'footprintmap' ),
@@ -305,11 +336,17 @@ final class FootprintMap {
 				'allPostsHint'=> __( '当前列出全部文章（关联文章标签名已留空）。', 'footprintmap' ),
 				'filterAll'  => __( '全部', 'footprintmap' ),
 				'noMatch'    => __( '没有符合筛选条件的地点。', 'footprintmap' ),
+				'noLocations'=> __( '暂无地点', 'footprintmap' ),
+				'sessionExpired' => __( '请求失败：登录状态可能已过期，请刷新页面后重试。', 'footprintmap' ),
 				'prev'       => __( '上一页', 'footprintmap' ),
 				'next'       => __( '下一页', 'footprintmap' ),
 				'pageInfo'   => __( '%1$d / %2$d', 'footprintmap' ),
 				'total'      => __( '共 %d 个地点', 'footprintmap' ),
 				'clusterTitle' => __( '该区域有 %d 个地点，点击选择编辑', 'footprintmap' ),
+				'modeNew'   => __( '新建地点：点击地图选择位置', 'footprintmap' ),
+				'modeView'  => __( '正在浏览：%s（点「编辑此地点」可修改）', 'footprintmap' ),
+				'modeEdit'  => __( '正在编辑：%s（可修改或点地图更新位置）', 'footprintmap' ),
+				'confirmDiscardNew' => __( '正在新建地点，已输入的名称或关联文章尚未保存。确定放弃并切换到其他地点吗？', 'footprintmap' ),
 			),
 		);
 		wp_localize_script( 'footprintmap-admin-map', 'FootprintMapAdmin', $data );
@@ -330,8 +367,12 @@ final class FootprintMap {
 
 		$id     = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
 		$name   = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
-		$lat    = isset( $_POST['lat'] ) ? (float) $_POST['lat'] : 0;
-		$lng    = isset( $_POST['lng'] ) ? (float) $_POST['lng'] : 0;
+		// 坐标先以字符串接收，校验用 is_numeric——不能用 empty()/! 判断：
+		// 0（赤道/本初子午线沿线）是合法坐标，会被误判为"空值"而拒绝保存。
+		$lat_raw = isset( $_POST['lat'] ) ? wp_unslash( $_POST['lat'] ) : '';
+		$lng_raw = isset( $_POST['lng'] ) ? wp_unslash( $_POST['lng'] ) : '';
+		$lat     = is_numeric( $lat_raw ) ? (float) $lat_raw : 0;
+		$lng     = is_numeric( $lng_raw ) ? (float) $lng_raw : 0;
 		$city   = isset( $_POST['city'] ) ? sanitize_text_field( wp_unslash( $_POST['city'] ) ) : '';
 		$province = isset( $_POST['province'] ) ? sanitize_text_field( wp_unslash( $_POST['province'] ) ) : '';
 		$country  = isset( $_POST['country'] ) ? sanitize_text_field( wp_unslash( $_POST['country'] ) ) : '';
@@ -347,7 +388,7 @@ final class FootprintMap {
 		}
 		$post_ids = array_values( array_unique( $post_ids ) );
 
-		if ( empty( $name ) || empty( $lat ) || empty( $lng ) ) {
+		if ( '' === $name || ! is_numeric( $lat_raw ) || ! is_numeric( $lng_raw ) ) {
 			wp_send_json_error( array( 'message' => __( '地点名称、经纬度不能为空', 'footprintmap' ) ) );
 		}
 
@@ -366,15 +407,16 @@ final class FootprintMap {
 			'lat'       => $lat,
 			'lng'       => $lng,
 			'post_ids'  => maybe_serialize( $post_ids ),
-			'created_at' => current_time( 'mysql' ),
 		);
-		$formats = array( '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%s' );
+		$formats = array( '%s', '%s', '%s', '%s', '%f', '%f', '%s' );
 
 		if ( $id ) {
 			$wpdb->update( $this->table, $data, array( 'id' => $id ), $formats, array( '%d' ) );
 			$new_id = $id;
 		} else {
-			$wpdb->insert( $this->table, $data, $formats );
+			// 仅新增时写入创建时间；更新保留原 created_at（首次创建时间不因编辑丢失）。
+			$data['created_at'] = current_time( 'mysql' );
+			$wpdb->insert( $this->table, $data, array_merge( $formats, array( '%s' ) ) );
 			$new_id = (int) $wpdb->insert_id;
 		}
 
@@ -413,40 +455,9 @@ final class FootprintMap {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error();
 		}
-		wp_send_json_success( $this->get_all_locations() );
-	}
-
-	/**
-	 * 按关键词搜索文章（下拉候选）。
-	 */
-	public function ajax_search_posts() {
-		check_ajax_referer( 'footprintmap_admin', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error();
-		}
-		$term = isset( $_POST['term'] ) ? sanitize_text_field( wp_unslash( $_POST['term'] ) ) : '';
-		$term_len = function_exists( 'mb_strlen' ) ? mb_strlen( $term ) : strlen( $term );
-		if ( $term_len < 1 ) {
-			wp_send_json_success( array( 'items' => array() ) );
-		}
-
-		$args = array(
-			'post_type'      => 'post',
-			'post_status'    => 'publish',
-			'posts_per_page' => 20,
-			's'              => $term,
-		);
-		$query = new WP_Query( $args );
-		$items = array();
-		foreach ( $query->posts as $p ) {
-			$thumb = get_the_post_thumbnail_url( $p->ID, 'thumbnail' );
-			$items[] = array(
-				'id'     => $p->ID,
-				'title'  => get_the_title( $p ),
-				'thumb'  => $thumb ? $thumb : '',
-			);
-		}
-		wp_send_json_success( array( 'items' => $items ) );
+		// 后台表格/表单只需 id/坐标/名称/省市国/post_ids 与文章标题缩略图，
+		// 无需前台专用的 featured 大图与文章链接 → 用轻量模式减小 payload。
+		wp_send_json_success( $this->get_all_locations( true ) );
 	}
 
 	/* ================================================================
@@ -601,20 +612,46 @@ final class FootprintMap {
 			$redirect( 'too-many-rows' );
 		}
 
-		// 定位表头：兼容含/不含 BOM、首行是否为表头。寻找包含 lng/lat 的行作为表头。
-		$header_idx = -1;
-		$canon = array(); // canonical field -> col index
-		foreach ( $lines as $i => $line ) {
-			$joined = strtolower( implode( ' ', $line ) );
-			if ( preg_match( '/(lng|longitude|经)/', $joined ) && preg_match( '/(lat|latitude|纬)/', $joined ) ) {
-				$header_idx = $i;
-				foreach ( $line as $k => $col ) {
-					$f = $this->canonical_field( $col );
-					if ( $f ) {
-						$canon[ $f ] = $k;
+		// 定位表头：兼容含/不含 BOM、首行是否为表头。
+		// 防误判（#17）：像「经纬大厦,…,116.4,39.9」这种同时含“经”“纬”二字的数据行，
+		// 旧逻辑会被当成表头而整行丢失。改为两步判定：
+		// ① 首行本身像数据行（含 ≥2 个可解析为数值的单元格，即经纬度值）→ 直接按无表头处理，不再扫描；
+		// ② 否则只在前 5 行内找表头，且候选行须能映射出至少 1 个规范字段才认定
+		//    （纯数据行虽可能含“经/纬”字样，但映射不出 name/city 等任何规范字段，不会误判）。
+		$is_data_row = function ( array $line ) {
+			$numeric = 0;
+			foreach ( $line as $cell ) {
+				if ( is_numeric( trim( (string) $cell ) ) ) {
+					$numeric++;
+					if ( $numeric >= 2 ) {
+						return true;
 					}
 				}
-				break;
+			}
+			return false;
+		};
+
+		$header_idx = -1;
+		$canon = array(); // canonical field -> col index
+		if ( ! empty( $lines ) && ! $is_data_row( $lines[0] ) ) {
+			$probe_max = min( 5, count( $lines ) );
+			for ( $i = 0; $i < $probe_max; $i++ ) {
+				$line   = $lines[ $i ];
+				$joined = strtolower( implode( ' ', $line ) );
+				if ( preg_match( '/(lng|longitude|经)/', $joined ) && preg_match( '/(lat|latitude|纬)/', $joined ) ) {
+					$cand = array();
+					foreach ( $line as $k => $col ) {
+						$f = $this->canonical_field( $col );
+						if ( $f ) {
+							$cand[ $f ] = $k;
+						}
+					}
+					if ( ! empty( $cand ) ) {
+						$header_idx = $i;
+						$canon      = $cand;
+						break;
+					}
+				}
 			}
 		}
 
@@ -622,10 +659,13 @@ final class FootprintMap {
 		$added   = 0;
 		$skipped = 0;
 		$errors  = array();
+		$db_failed = false; // 是否发生数据库写入失败（区别于"数据行无效被跳过"）
 
 		// 导入语义：始终「覆盖更新」——先清空全部现有点位，再按 CSV 行序重建，
 		// 使表严格等于文件内容。不再需要导入模式与 CSV 的 id 列：
 		// id 由数据库自增自动分配（CSV 不含 id，用户也不可见，无需手动编排）。
+		// 整个"清空+重建"包在事务里：若重建过程中发生数据库写入失败，
+		// 回滚后原数据完整保留，不会出现"旧数据已删、新数据只进了一半"的中间态。
 		$deleted   = 0;
 		$data_line_count = count( $lines ) - ( $header_idx >= 0 ? 1 : 0 );
 		if ( $data_line_count < 1 ) {
@@ -638,11 +678,13 @@ final class FootprintMap {
 			$redirect( 'imported' );
 		}
 
+		$wpdb->query( 'START TRANSACTION' );
 		// 覆盖更新不可撤销：先清空旧数据，再按 CSV 重建。
 		$old_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table}" );
 		$wipe      = $wpdb->query( "DELETE FROM {$this->table}" );
 		// wipe 为受影响行数（0=原表本就为空）；false=语句执行失败。
 		if ( false === $wipe ) {
+			$wpdb->query( 'ROLLBACK' );
 			set_transient( 'footprintmap_import_result', array(
 				'added'   => 0,
 				'deleted' => 0,
@@ -705,14 +747,19 @@ final class FootprintMap {
 			$rec['province'] = $this->csv_unsafe( trim( $rec['province'] ) );
 			$rec['country']  = $this->csv_unsafe( trim( $rec['country'] ) );
 			$rec['name'] = sanitize_text_field( $rec['name'] );
-			$lat = (float) str_replace( ',', '.', $rec['lat'] );
-			$lng = (float) str_replace( ',', '.', $rec['lng'] );
+			// 坐标先归一小数点再判 is_numeric——不能用 ! $lat 判断：
+			// 0（赤道/本初子午线）是合法坐标，会被误判为"缺少坐标"而跳过。
+			$lat_str = str_replace( ',', '.', trim( $rec['lat'] ) );
+			$lng_str = str_replace( ',', '.', trim( $rec['lng'] ) );
 
-			if ( '' === $rec['name'] || ! $lat || ! $lng ) {
+			if ( '' === $rec['name'] || '' === $lat_str || '' === $lng_str
+				|| ! is_numeric( $lat_str ) || ! is_numeric( $lng_str ) ) {
 				$skipped++;
-				$errors[] = sprintf( __( '第 %d 行缺少名称或坐标，已跳过。', 'footprintmap' ), $i + 1 );
+				$errors[] = sprintf( __( '第 %d 行缺少名称或坐标（或坐标不是数字），已跳过。', 'footprintmap' ), $i + 1 );
 				continue;
 			}
+			$lat = (float) $lat_str;
+			$lng = (float) $lng_str;
 			// 坐标范围校验：越界的行视为无效跳过，避免脏坐标进入数据库。
 			if ( $lat < -90 || $lat > 90 || $lng < -180 || $lng > 180 ) {
 				$skipped++;
@@ -737,10 +784,28 @@ final class FootprintMap {
 			if ( $ok ) {
 				$added++;
 			} else {
+				$db_failed = true;
 				$skipped++;
 				$errors[] = sprintf( __( '第 %d 行写入失败。', 'footprintmap' ), $i + 1 );
 			}
 		}
+
+		// 数据库写入失败 → 整体回滚，原数据完整保留（原子导入）；否则提交事务。
+		if ( $db_failed ) {
+			$wpdb->query( 'ROLLBACK' );
+			$this->bust_front_cache();
+			set_transient( 'footprintmap_import_result', array(
+				'added'   => 0,
+				'deleted' => 0,
+				'skipped' => $skipped,
+				'errors'  => array_merge(
+					array( __( '导入：部分数据行写入数据库失败，本次导入已整体回滚，原有地点数据未做任何更改。请检查数据库状态后重试；无效数据行如下：', 'footprintmap' ) ),
+					$errors
+				),
+			), 60 );
+			$redirect( 'imported' );
+		}
+		$wpdb->query( 'COMMIT' );
 
 		// 导入后整表已重建 → 清除前台缓存。
 		$this->bust_front_cache();
@@ -995,16 +1060,19 @@ final class FootprintMap {
 	}
 
 	/**
-	 * 取回全部地点，并批量附加关联文章汇总与特色图。
+	 * 取回全部地点，并批量附加关联文章汇总（与特色图）。
 	 *
 	 * 性能说明：全部点位的关联文章数据（标题/链接/缩略图）用一次 WP_Query +
 	 * update_post_thumbnail_cache() 批量取得，避免逐点逐篇的 N+1 查询
 	 * （原先每个 get_post_status/get_the_title/get_permalink/
 	 * get_the_post_thumbnail_url 都独立触发元数据查询，点位多时数百次起步）。
 	 *
-	 * @return array 地点数组（含 posts / featured 字段）。
+	 * @param bool $light true=轻量模式（后台列表 AJAX 用）：省略每点 featured 大图
+	 *                      与文章 link/featured 等前台专用字段，减小 payload；
+	 *                      false=完整模式（前台缓存用）。
+	 * @return array 地点数组（含 posts / featured 字段，light 时无 featured）。
 	 */
-	public function get_all_locations() {
+	public function get_all_locations( $light = false ) {
 		global $wpdb;
 		$rows = $wpdb->get_results( "SELECT * FROM {$this->table} ORDER BY id ASC", ARRAY_A );
 		if ( empty( $rows ) ) {
@@ -1039,12 +1107,15 @@ final class FootprintMap {
 			) );
 			update_post_thumbnail_cache( $query );
 			foreach ( $query->posts as $p ) {
-				$posts_map[ $p->ID ] = array(
-					'title'    => get_the_title( $p ),
-					'link'     => get_permalink( $p ),
-					'thumb'    => get_the_post_thumbnail_url( $p, 'medium' ),
-					'featured' => get_the_post_thumbnail_url( $p, 'large' ),
+				$entry = array(
+					'title' => get_the_title( $p ),
+					'thumb' => get_the_post_thumbnail_url( $p, 'medium' ),
 				);
+				if ( ! $light ) {
+					$entry['link']     = get_permalink( $p );
+					$entry['featured'] = get_the_post_thumbnail_url( $p, 'large' );
+				}
+				$posts_map[ $p->ID ] = $entry;
 			}
 		}
 
@@ -1069,14 +1140,16 @@ final class FootprintMap {
 					'link'  => $pm['link'],
 					'thumb' => $pm['thumb'],
 				);
-				if ( '' === $featured && $pm['featured'] ) {
+				if ( '' === $featured && ! empty( $pm['featured'] ) ) {
 					$featured = $pm['featured'];
 				}
 			}
 
 			$row['post_ids'] = $ids;
 			$row['posts']    = $posts;
-			$row['featured'] = $featured;
+			if ( ! $light ) {
+				$row['featured'] = $featured;
+			}
 			$row['id']       = (int) $row['id']; // 必须转 int，否则前台严格相等匹配不到
 			$row['lat']      = (float) $row['lat'];
 			$row['lng']      = (float) $row['lng'];
@@ -1173,16 +1246,18 @@ final class FootprintMap {
 				) );
 
 				if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
-					// 收集名称或别名(slug)中包含任一标签片段的词条 id（跨片段取并集 → OR 语义）。
+					// 收集名称或别名(slug)与任一标签片段**完全一致**的词条 id（跨片段取并集 → OR 语义）。
+					// 注意用整词相等而非子串包含：填“旅行”不应命中“出国旅行攻略”这类更长的标签。
 					$needles  = array();
 					foreach ( $parts as $part ) {
 						$needles[] = function_exists( 'mb_strtolower' ) ? mb_strtolower( $part, 'UTF-8' ) : strtolower( $part );
 					}
 					$term_ids = array();
 					foreach ( $terms as $t ) {
-						$hay = function_exists( 'mb_strtolower' ) ? mb_strtolower( $t->name . ' ' . $t->slug, 'UTF-8' ) : strtolower( $t->name . ' ' . $t->slug );
+						$name_l = function_exists( 'mb_strtolower' ) ? mb_strtolower( $t->name, 'UTF-8' ) : strtolower( $t->name );
+						$slug_l = function_exists( 'mb_strtolower' ) ? mb_strtolower( $t->slug, 'UTF-8' ) : strtolower( $t->slug );
 						foreach ( $needles as $needle ) {
-							if ( '' !== $needle && false !== strpos( $hay, $needle ) ) {
+							if ( '' !== $needle && ( $needle === $name_l || $needle === $slug_l ) ) {
 								$term_ids[] = (int) $t->term_id;
 								break;
 							}
@@ -1259,8 +1334,19 @@ final class FootprintMap {
 				if ( '' !== $province ) {
 					$need_provinces = true;
 				}
-				if ( ( '' !== $country && '中国' !== $country ) || ( '' === $country && '' === $province ) ) {
+				if ( '' !== $country && '中国' !== $country ) {
 					$need_world = true;
+				} elseif ( '' === $country && '' === $province ) {
+					// country/province 皆空的旧点：按经纬度粗判——只有明显落在中国范围
+					// （含港澳台与南海诸岛的外包框）之外才需要世界边界；框内的点前台会按
+					// 国内处理（不着色、气泡回退省/市名），无需为此加载约 576KB 世界数据。
+					// 这是“粗判”：bbox 内但实际位于邻国（如蒙古/朝鲜半岛/九州）且未存
+					// 国名的极端数据点将不再被着色，属可接受取舍（该点本就缺归属信息）。
+					$lng = isset( $loc['lng'] ) ? (float) $loc['lng'] : 0;
+					$lat = isset( $loc['lat'] ) ? (float) $loc['lat'] : 0;
+					if ( $lng < 73.4 || $lng > 135.2 || $lat < 3.5 || $lat > 53.7 ) {
+						$need_world = true;
+					}
 				}
 			}
 
@@ -1333,9 +1419,9 @@ final class FootprintMap {
 			<div id="footprintmap-container" class="footprintmap-container"></div>
 			<div class="footprintmap-status">
 			<?php
-			// 轻量计数：只取地点总数，不重复执行 get_all_locations() 的全量组装。
-			global $wpdb;
-			$count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table}" );
+			// 轻量计数：直接复用 get_front_locations_cached()（上方 enqueue 阶段已取好并缓存，
+			// 此处命中 transient，零额外 SQL），替代原先单独的 COUNT(*) 查询。
+			$count = count( $this->get_front_locations_cached() );
 			// 数字用 <b> 高亮（配合 .footprintmap-status b 样式）；先整体转义译文，
 			// 再插入已转义的 <b>数字</b>，保证标签合法且数据安全。
 			printf(

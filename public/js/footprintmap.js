@@ -18,6 +18,7 @@
 	var layerPolygons = [];      // 已绘制的区划多边形（国家着色用）
 	var busy = false;
 	var closeBound = false;      // 是否已绑定气泡关闭按钮事件委托
+	var _bubbleOpenTick = 0;     // 气泡最近一次打开的时间戳（防地图 click 误关刚开的气泡）
 	var frontStarted = false;    // 是否已初始化地图（防高德回调与轮询重复执行）
 	var frontBooted = false;     // 是否已启动就绪检测
 
@@ -80,12 +81,17 @@
 			offset: new AMap.Pixel(0, -28),
 			autoMove: true
 		});
-
 		// 缩放动画结束（zoomend）/ 平移结束（moveend）后再重新聚合渲染与上色：
 		// 不监听 zoomchange / mapmove，否则平滑缩放与拖动过程会逐帧全量重建
 		// marker，打断地图动画造成明显卡顿；改为结束后一次性更新，动画全程流畅。
 		map.on('zoomend', scheduleRender);
 		map.on('moveend', scheduleRender);
+		// 点击地图空白处关闭已打开的气泡（常规实现下点击标记不会触发地图 click；
+		// _bubbleOpenTick 防御个别环境标记点击冒泡到地图时误关刚打开的气泡）。
+		map.on('click', function () {
+			if (Date.now() - _bubbleOpenTick < 50) return;
+			if (infoWindow) infoWindow.close();
+		});
 
 		setDefaultView();
 		colorRegions();
@@ -417,13 +423,11 @@
 	function render() {
 		clearMarkers();
 		if (!allLocations.length) {
-			if (window.console && console.debug) console.debug('[FootprintMap] 无地点数据');
 			return;
 		}
 
 		var groups = clusterByScreenDistance(allLocations, CLUSTER_DIST);
 
-		var nCluster = 0, nSingle = 0;
 		groups.forEach(function (grp) {
 			// 组内若含被用户点开过的成员，强制按单点渲染；用后即清。
 			// 这样用户每次点聚合点都能可靠看到具体地点，不再被"密集区永远聚合"困住。
@@ -433,18 +437,13 @@
 			}
 			if (hasForce) {
 				grp.forEach(function (loc) { delete _forceIndividual[loc.id]; });
-				grp.forEach(function (loc) { renderSingle(loc); nSingle++; });
+				grp.forEach(function (loc) { renderSingle(loc); });
 			} else if (grp.length === 1) {
 				renderSingle(grp[0]);
-				nSingle++;
 			} else {
 				renderCluster(grp);
-				nCluster++;
 			}
 		});
-		if (window.console && console.debug) {
-			console.debug('[FootprintMap] 渲染完成 zoom=' + map.getZoom() + ' 地点=' + allLocations.length + ' 单点=' + nSingle + ' 聚合点=' + nCluster);
-		}
 	}
 
 	/**
@@ -542,7 +541,7 @@
 		} else if (useDefaultImg) {
 			content = '<div class="tm-point" style="background-image:url(\'' + escapeAttr(defaultImg) + '\')"></div>';
 		} else if (hasArticle) {
-			// 有文章但无特色图：用一个带小写"文"的封面占位，仍可点击弹文章
+			// 有文章但无特色图：纯灰色圆块占位（无文字/图片），仍可点击弹文章列表
 			content = '<div class="tm-point" style="background:#e0e0e0;"></div>';
 		} else {
 			content = '<div class="tm-point tm-red"></div>';
@@ -651,6 +650,7 @@
 		var pos = new AMap.LngLat(loc.lng, loc.lat);
 		infoWindow.setContent(html);
 		infoWindow.open(map, pos);
+		_bubbleOpenTick = Date.now();
 		// 关闭按钮（右上角叉）：用事件委托统一处理，
 		// 避免依赖 infoWindow.getContent() 返回 DOM 而可能得到字符串导致报错。
 		if (!closeBound) {

@@ -35,16 +35,6 @@
 	font-size: 12px;
 	margin: 4px 0;
 }
-.tm-transfer-enc {
-	color: #666;
-	font-size: 12px;
-	background: #f0f6fc;
-	border: 1px solid #c5d9ed;
-	border-radius: 3px;
-	padding: 8px 10px;
-	margin: 6px 0 2px;
-}
-.tm-transfer-enc strong { color: #2271b1; }
 .footprintmap-admin-layout {
 	display: flex;
 	gap: 20px;
@@ -169,38 +159,37 @@
 .footprintmap-msg.ok { color: #46b450; }
 .footprintmap-msg.err { color: #dc3232; }
 
-/* 关联文章：搜索建议下拉 / 已选列表 */
-.footprintmap-post-search-wrap {
-	position: relative;
+/* 表单模式横幅：新建 / 浏览(只读) / 编辑 */
+.footprintmap-mode {
+	margin: -4px 0 14px;
+	padding: 8px 12px;
+	border-radius: 4px;
+	border-left: 4px solid;
+	font-weight: 600;
+	line-height: 1.5;
 }
-.footprintmap-suggest {
-	position: absolute;
-	left: 0;
-	right: 0;
-	top: 100%;
-	z-index: 1000;
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	border-top: none;
-	display: none;
-	max-height: 240px;
-	overflow: auto;
-	box-shadow: 0 4px 12px rgba(0,0,0,.12);
-}
-.footprintmap-suggest.open { display: block; }
-.footprintmap-suggest-item {
-	padding: 8px 10px;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	border-bottom: 1px solid #f0f0f1;
-}
-.footprintmap-suggest-item:hover { background: #f6f7f7; }
-.footprintmap-suggest-item img { width: 40px; height: 30px; object-fit: cover; }
-.footprintmap-suggest-item .title { flex: 1; }
-.footprintmap-suggest-empty { padding: 10px; color: #666; }
+.footprintmap-mode .fp-mode-ico { margin-right: 6px; }
+.footprintmap-mode.mode-new  { background: #f0f6fc; border-color: #2271b1; color: #135e96; }
+.footprintmap-mode.mode-view { background: #f6f7f7; border-color: #8c8f94; color: #50575e; }
+.footprintmap-mode.mode-edit { background: #fcf9e8; border-color: #996800; color: #7a5600; }
 
+/* 浏览（只读）态：字段置灰，弱化可编辑观感 */
+#footprintmap-location-form.tm-viewmode input[type="text"] {
+	background: #f0f0f1;
+	color: #50575e;
+	cursor: not-allowed;
+}
+#footprintmap-location-form.tm-viewmode select {
+	background: #f0f0f1;
+	color: #50575e;
+	cursor: not-allowed;
+}
+/* 浏览态隐藏"移除关联文章"与"删除"类破坏性控件 */
+#footprintmap-location-form.tm-viewmode .footprintmap-linked-item .remove {
+	display: none;
+}
+
+/* 关联文章：已选列表 */
 .footprintmap-linked {
 	margin-top: 6px;
 	border: 1px dashed #c3c4c7;
