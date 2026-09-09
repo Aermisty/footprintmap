@@ -100,7 +100,8 @@ if ( $imp_res ) {
 				<?php esc_html_e( '填入 JS Key 与安全密钥。', 'footprintmap' ); ?>
 			</p>
 		</div>
-	<?php else : ?>		<div class="footprintmap-admin-layout">
+	<?php else : ?>
+		<div class="footprintmap-admin-layout">
 			<div class="footprintmap-admin-map-col">
 				<div class="footprintmap-toolbar">
 					<input type="text" id="footprintmap-admin-search" class="footprintmap-search" placeholder="<?php esc_attr_e( '搜索地点/城市…', 'footprintmap' ); ?>" />
@@ -123,22 +124,22 @@ if ( $imp_res ) {
 					<div class="footprintmap-row">
 						<p>
 							<label for="loc-name"><?php esc_html_e( '地点名称 *', 'footprintmap' ); ?></label>
-							<input type="text" id="loc-name" name="name" class="widefat" placeholder="<?php esc_attr_e( '例如：深圳 / 巴黎 / 启真湖底', 'footprintmap' ); ?>" />
+							<input type="text" id="loc-name" name="name" class="widefat" placeholder="<?php esc_attr_e( '例如：深圳 / 启真湖底', 'footprintmap' ); ?>" />
 						</p>
 						<p>
 							<label for="loc-country"><?php esc_html_e( '国家', 'footprintmap' ); ?></label>
-							<input type="text" id="loc-country" name="country" class="widefat" placeholder="<?php esc_attr_e( '国家（中国地点自动识别）', 'footprintmap' ); ?>" />
+							<input type="text" id="loc-country" name="country" class="widefat" placeholder="<?php esc_attr_e( '国家', 'footprintmap' ); ?>" />
 						</p>
 					</div>
 
 					<div class="footprintmap-row">
 						<p>
-							<label><?php esc_html_e( '省份', 'footprintmap' ); ?></label>
-							<input type="text" id="loc-province" name="province" class="widefat" placeholder="<?php esc_attr_e( '省份（中国地点自动识别）', 'footprintmap' ); ?>" />
+							<label><?php esc_html_e( '省级行政区', 'footprintmap' ); ?></label>
+							<input type="text" id="loc-province" name="province" class="widefat" placeholder="<?php esc_attr_e( '省级行政区', 'footprintmap' ); ?>" />
 						</p>
 						<p>
 							<label><?php esc_html_e( '城市', 'footprintmap' ); ?></label>
-							<input type="text" id="loc-city" name="city" class="widefat" placeholder="<?php esc_attr_e( '城市（中国地点自动识别）', 'footprintmap' ); ?>" />
+							<input type="text" id="loc-city" name="city" class="widefat" placeholder="<?php esc_attr_e( '城市', 'footprintmap' ); ?>" />
 						</p>
 					</div>
 
@@ -198,7 +199,7 @@ if ( $imp_res ) {
 						<th><?php esc_html_e( '经度', 'footprintmap' ); ?></th>
 						<th><?php esc_html_e( '纬度', 'footprintmap' ); ?></th>
 						<th class="footprintmap-sortable" id="footprintmap-post-count-th">
-							<span><?php esc_html_e( '关联文章数量', 'footprintmap' ); ?></span>
+							<span><?php esc_html_e( '文章数', 'footprintmap' ); ?></span>
 							<span class="footprintmap-sort-indicator" id="footprintmap-sort-indicator"></span>
 						</th>
 						<th><?php esc_html_e( '操作', 'footprintmap' ); ?></th>
