@@ -5,7 +5,7 @@
 A personal travel-footprint map for WordPress, powered by [AMap (高德地图) JS API](https://lbs.amap.com/).  
 在 WordPress 里记录「你去过的地方」，并把足迹渲染成一张可交互的世界地图。
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/aermisty/footprintmap/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue)](https://github.com/aermisty/footprintmap/releases)
 [![PHP](https://img.shields.io/badge/PHP-%3E%3D7.2-8892BF)](https://www.php.net/)
 [![WordPress](https://img.shields.io/badge/WordPress-5.6%2B-21759b)](https://wordpress.org/)
 [![License](https://img.shields.io/badge/license-GPLv2-green)](#license)

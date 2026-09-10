@@ -3,7 +3,7 @@
  * Plugin Name:       Footprint Map 足迹地图
  * Plugin URI:        https://github.com/aermisty/footprintmap
  * Description:       在后台标记去过的地点（地图点选获取经纬度、自定义名称、关联多篇文章），在前台以高德地图展示足迹点位。
- * Version:           1.0.0
+ * Version:           1.0.1
  * Author:            Aermisty
  * Text Domain:       footprintmap
  */
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
-define( 'FOOTPRINTMAP_VERSION', '1.0.0' );
+define( 'FOOTPRINTMAP_VERSION', '1.0.1' );
 define( 'FOOTPRINTMAP_FILE', __FILE__ );
 define( 'FOOTPRINTMAP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FOOTPRINTMAP_URL', plugin_dir_url( __FILE__ ) );
@@ -256,6 +256,28 @@ final class FootprintMap {
 	}
 
 	/* ================================================================
+	 * 静态资源版本号
+	 * ================================================================ */
+
+	/**
+	 * 取本地静态资源的缓存版本号。
+	 *
+	 * 优先用文件修改时间（filemtime）：文件一改，版本号即变，浏览器就不会再
+	 * 命中旧缓存 —— 从根上解决「改了 CSS/JS 但前台/后台看不到效果」的问题。
+	 * 文件不存在时回退到插件版本常量。高德远程脚本不使用本方法（保持常量即可）。
+	 *
+	 * @param string $relative 相对插件根目录的路径，如 admin/css/admin.css。
+	 * @return int|string 版本号（时间戳整数，或回退的版本字符串）。
+	 */
+	private function asset_ver( $relative ) {
+		$file = FOOTPRINTMAP_DIR . ltrim( $relative, '/' );
+		if ( file_exists( $file ) ) {
+			return (int) filemtime( $file );
+		}
+		return FOOTPRINTMAP_VERSION;
+	}
+
+	/* ================================================================
 	 * 后台静态资源加载
 	 * ================================================================ */
 
@@ -292,7 +314,7 @@ final class FootprintMap {
 			if ( ! empty( $settings['jscode'] ) ) {
 				wp_add_inline_script( 'footprintmap-admin-amap', 'window._AMapSecurityConfig = { securityJsCode: ' . wp_json_encode( $settings['jscode'] ) . ' };', 'before' );
 			}
-			wp_enqueue_script( 'footprintmap-admin-map', FOOTPRINTMAP_URL . 'admin/js/admin-map.js', array( 'jquery' ), FOOTPRINTMAP_VERSION, true );
+			wp_enqueue_script( 'footprintmap-admin-map', FOOTPRINTMAP_URL . 'admin/js/admin-map.js', array( 'jquery' ), $this->asset_ver( 'admin/js/admin-map.js' ), true );
 		} else {
 			// 设置页：媒体选择器脚本。不依赖 media-editor handle（避免因依赖不满足被静默跳过），
 			// 脚本内部自行轮询 window.wp.media 就绪后再绑定（与 AMap 轮询模式一致）。
@@ -301,7 +323,7 @@ final class FootprintMap {
 				'footprintmap-media-picker',
 				FOOTPRINTMAP_URL . 'admin/js/media-picker.js',
 				array(),
-				FOOTPRINTMAP_VERSION,
+				$this->asset_ver( 'admin/js/media-picker.js' ),
 				true
 			);
 			wp_localize_script( 'footprintmap-media-picker', 'FootprintMapMediaPicker', array(
@@ -310,7 +332,7 @@ final class FootprintMap {
 			) );
 		}
 
-		wp_enqueue_style( 'footprintmap-admin', FOOTPRINTMAP_URL . 'admin/css/admin.css', array(), FOOTPRINTMAP_VERSION );
+		wp_enqueue_style( 'footprintmap-admin', FOOTPRINTMAP_URL . 'admin/css/admin.css', array(), $this->asset_ver( 'admin/css/admin.css' ) );
 
 		$data = array(
 			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
@@ -582,6 +604,11 @@ final class FootprintMap {
 		}
 
 		$tmp   = $_FILES['footprintmap_csv']['tmp_name']; // phpcs:ignore
+		// 安全校验：确认这是本次请求真实上传的临时文件。缺少这一步时，若 tmp_name
+		// 被伪造为任意服务器路径，file_get_contents 会读取该文件内容，存在任意文件读取风险。
+		if ( ! is_uploaded_file( $tmp ) ) {
+			$redirect( 'upload-error' );
+		}
 		$error = (int) $_FILES['footprintmap_csv']['error'];
 		if ( UPLOAD_ERR_OK !== $error ) {
 			$redirect( 'upload-error' );
@@ -1137,7 +1164,9 @@ final class FootprintMap {
 				$posts[] = array(
 					'id'    => $pid,
 					'title' => $pm['title'],
-					'link'  => $pm['link'],
+					// light 模式（后台列表）下 $pm 不含 link，直接读会触发 PHP 8
+					// “Undefined array key” 警告，故用 isset 兜底为空串。
+					'link'  => isset( $pm['link'] ) ? $pm['link'] : '',
 					'thumb' => $pm['thumb'],
 				);
 				if ( '' === $featured && ! empty( $pm['featured'] ) ) {
@@ -1361,15 +1390,15 @@ final class FootprintMap {
 			$front_deps = array( 'footprintmap-front-amap' );
 			// 世界国家边界（国外点位着色/归属推断）。国内点按“省级行政区”着色，数据在 footprintmap-provinces.js。
 			if ( $need_world ) {
-				wp_register_script( 'footprintmap-world', FOOTPRINTMAP_URL . 'public/js/footprintmap-world.js', array(), FOOTPRINTMAP_VERSION, true );
+				wp_register_script( 'footprintmap-world', FOOTPRINTMAP_URL . 'public/js/footprintmap-world.js', array(), $this->asset_ver( 'public/js/footprintmap-world.js' ), true );
 				$front_deps[] = 'footprintmap-world';
 			}
 			// 中国省级行政区边界（插件内置共享文件）：前台按“足迹所在省”填绿（含港澳台与南海诸岛归属），本地读取、零高德请求。
 			if ( $need_provinces && file_exists( FOOTPRINTMAP_DIR . 'public/js/footprintmap-provinces.js' ) ) {
-				wp_register_script( 'footprintmap-provinces', FOOTPRINTMAP_URL . 'public/js/footprintmap-provinces.js', array(), FOOTPRINTMAP_VERSION, true );
+				wp_register_script( 'footprintmap-provinces', FOOTPRINTMAP_URL . 'public/js/footprintmap-provinces.js', array(), $this->asset_ver( 'public/js/footprintmap-provinces.js' ), true );
 				$front_deps[] = 'footprintmap-provinces';
 			}
-			wp_register_script( 'footprintmap-front', FOOTPRINTMAP_URL . 'public/js/footprintmap.js', $front_deps, FOOTPRINTMAP_VERSION, true );
+			wp_register_script( 'footprintmap-front', FOOTPRINTMAP_URL . 'public/js/footprintmap.js', $front_deps, $this->asset_ver( 'public/js/footprintmap.js' ), true );
 			$default_image_id = isset( $settings['default_image'] ) ? absint( $settings['default_image'] ) : 0;
 			$default_image    = $default_image_id ? wp_get_attachment_image_url( $default_image_id, 'medium' ) : '';
 			wp_localize_script( 'footprintmap-front', 'FootprintMapData', array(
@@ -1386,7 +1415,7 @@ final class FootprintMap {
 				wp_enqueue_script( 'footprintmap-provinces' );
 			}
 			wp_enqueue_script( 'footprintmap-front' );
-			wp_enqueue_style( 'footprintmap-front', FOOTPRINTMAP_URL . 'public/css/footprintmap.css', array(), FOOTPRINTMAP_VERSION );
+			wp_enqueue_style( 'footprintmap-front', FOOTPRINTMAP_URL . 'public/css/footprintmap.css', array(), $this->asset_ver( 'public/css/footprintmap.css' ) );
 		}
 	}
 
